@@ -7,7 +7,7 @@ def read_readme():
 
 setup(
     name="moore_num",
-    version="0.1.2",
+    version="0.1.3",
     packages=find_packages(),
     entry_points={
         "console_scripts": [
