@@ -89,6 +89,39 @@ REVERSE_UNITS = {v.lower(): k for k, v in UNITS_LONG.items()}
 REVERSE_UNITS_SHORT = {v.lower(): k for k, v in UNITS_SHORT.items()}
 REVERSE_TENS = {v.lower(): k for k, v in TENS.items()}
 
+def _get_token_value(w: str) -> int:
+    w = w.lower()
+    if w in REVERSE_UNITS: return REVERSE_UNITS[w]
+    if w in REVERSE_UNITS_SHORT: return REVERSE_UNITS_SHORT[w]
+    if w in REVERSE_TENS: return REVERSE_TENS[w]
+    if w == "piig": return 10
+    if w in ["koabg", "koabga"]: return 100
+    if w == "kobsi": return 200
+    if w.startswith("kobs-"):
+        unit = w.split("-", 1)[1]
+        val = REVERSE_UNITS_SHORT.get(unit, REVERSE_UNITS.get(unit, 1))
+        return val * 100
+    return 0
+
+def _extract_numbers(s: str) -> list[int]:
+    words = [w for w in s.split() if w not in ["la", "a"]]
+    vals = []
+    for w in words:
+        v = _get_token_value(w)
+        if v > 0: vals.append(v)
+    if not vals: return []
+    numbers = []
+    current_num = vals[0]
+    last_val = vals[0]
+    for v in vals[1:]:
+        if v < last_val: current_num += v
+        else:
+            numbers.append(current_num)
+            current_num = v
+        last_val = v
+    numbers.append(current_num)
+    return numbers
+
 def text_to_num(text: str, is_money: bool = False) -> int:
     def _strip_conj(s):
         s = s.strip()
@@ -99,73 +132,76 @@ def text_to_num(text: str, is_money: bool = False) -> int:
     def _parse(s):
         s = s.strip().lower()
         if not s or s == "zaalem": return 0
-        if s in REVERSE_UNITS: return REVERSE_UNITS[s]
-        if s in REVERSE_UNITS_SHORT: return REVERSE_UNITS_SHORT[s]
-        if s == "piig": return 10
-        if s == "piiga": return 10
         
-        # Priority: Major units
         if "milyar" in s:
+            if "milyar ye" in s:
+                p = s.split("milyar ye", 1)
+                return 1_000_000_000 + _parse(_strip_conj(p[1]))
             p = s.split("milyar", 1)
-            count = _parse(p[0]) if p[0].strip() else 1
-            return count * 1_000_000_000 + _parse(_strip_conj(p[1]))
+            rem_str = p[1].strip()
+            if not rem_str: return 1_000_000_000
+            if rem_str.startswith("la "): return 1_000_000_000 + _parse(_strip_conj(rem_str))
+            
+            idx1 = rem_str.find("milyõ")
+            idx2 = rem_str.find("tus")
+            if idx1 == -1: idx1 = len(rem_str)
+            if idx2 == -1: idx2 = len(rem_str)
+            split_idx = min(idx1, idx2)
+            
+            m_part = rem_str[:split_idx]
+            rest_str = rem_str[split_idx:]
+            
+            nums = _extract_numbers(m_part)
+            mult = nums[0] if nums else 1
+            rem_val = sum(nums[1:]) if len(nums)>1 else 0
+            return mult * 1_000_000_000 + rem_val + _parse(_strip_conj(rest_str))
             
         if "milyõ" in s:
             if "milyõ a ye" in s:
-                return 1_000_000 + _parse(_strip_conj(s.replace("milyõ a ye", "", 1)))
+                p = s.split("milyõ a ye", 1)
+                return 1_000_000 + _parse(_strip_conj(p[1]))
             p = s.split("milyõ", 1)
             count = _parse(p[0]) if p[0].strip() else 1
             return count * 1_000_000 + _parse(_strip_conj(p[1]))
 
         if "tus" in s:
             if "tusri" in s:
-                return 1000 + _parse(_strip_conj(s.replace("tusri", "", 1)))
+                p = s.split("tusri", 1)
+                return 1000 + _parse(_strip_conj(p[1]))
             if "tus a" in s:
                 p = s.split("tus a", 1)
-                rem_w = p[1].strip().split()
-                if not rem_w: return 1000 # Should not happen
-                unit = rem_w[0]
-                val = REVERSE_UNITS_SHORT.get(unit, REVERSE_UNITS.get(unit, 0))
-                return val * 1000 + _parse(_strip_conj(" ".join(rem_w[1:])))
+                nums = _extract_numbers(_strip_conj(p[1]))
+                mult = nums[0] if nums else 1
+                return mult * 1000 + sum(nums[1:])
             p = s.split("tus", 1)
-            rem_w = p[1].strip().split()
-            if not rem_w: return 1000
-            if rem_w[0] in ["la", "a"]:
-                return 1000 + _parse(_strip_conj(p[1]))
+            rem_str = p[1].strip()
+            if not rem_str: return 1000
+            if rem_str.startswith("la "):
+                nums = _extract_numbers(_strip_conj(rem_str))
+                return 1000 + sum(nums)
             else:
-                count = _parse(rem_w[0])
-                return count * 1000 + _parse(_strip_conj(" ".join(rem_w[1:])))
+                nums = _extract_numbers(rem_str)
+                mult = nums[0] if nums else 1
+                return mult * 1000 + sum(nums[1:])
 
-        if "kobs" in s:
-            # handle kobs-yi or kobs yi
-            p = s.replace("kobs-", "kobs ").split("kobs", 1)
-            rem_w = p[1].strip().split()
-            unit = rem_w[0]
-            val = REVERSE_UNITS_SHORT.get(unit, REVERSE_UNITS.get(unit, 0))
-            return val * 100 + _parse(_strip_conj(" ".join(rem_w[1:])))
-        
-        if "koabg" in s:
-            return 100 + _parse(_strip_conj(s.replace("koabga", "").replace("koabg", "").strip()))
-
-        # Tens and small units
-        if "la a" in s:
-            p = s.split("la a", 1)
-            return _parse(p[0]) + _parse(p[1])
-        if "la" in s:
-            p = s.split("la", 1)
-            return _parse(p[0]) + _parse(p[1])
+        if "kobsi" in s:
+            p = s.split("kobsi", 1)
+            nums = _extract_numbers(_strip_conj(p[1]))
+            return 200 + sum(nums)
             
-        if s in REVERSE_TENS: return REVERSE_TENS[s]
-        return 0
+        if "kobs" in s:
+            p = s.replace("kobs-", "kobs ").split("kobs", 1)
+            nums = _extract_numbers(_strip_conj(p[1]))
+            mult = nums[0] if nums else 1
+            return mult * 100 + sum(nums[1:])
+            
+        if "koabg" in s:
+            p = s.replace("koabga", "koabg").split("koabg", 1)
+            nums = _extract_numbers(_strip_conj(p[1]))
+            return 100 + sum(nums)
+
+        nums = _extract_numbers(s)
+        return sum(nums)
 
     val = _parse(text)
     return val * 5 if is_money else val
-
-def _parse_small(t: str) -> int:
-    t = t.strip()
-    if not t: return 0
-    if t in REVERSE_TENS: return REVERSE_TENS[t]
-    if t in REVERSE_UNITS: return REVERSE_UNITS[t]
-    if t in REVERSE_UNITS_SHORT: return REVERSE_UNITS_SHORT[t]
-    if t == "piig": return 10
-    return 0

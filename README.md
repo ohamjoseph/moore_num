@@ -2,6 +2,8 @@
 
 A Python library for converting numbers to Mooré (Mossi) language text and vice versa.
 
+🚀 **Try the interactive demo:** [num2text-playground.vercel.app](https://num2text-playground.vercel.app/)
+
 ## Features
 
 - **Number to Mooré Text**: Convert integers to their textual representation in Mooré.
@@ -61,3 +63,16 @@ num2moore 500 --money
 ## License
 
 MIT
+
+## Citation
+
+If you use this software in your research, please cite it using the following BibTeX format:
+
+```bibtex
+@software{moore_num,
+  author = {Ouily, Hamed Joseph},
+  title = {moore\_num: A Python library for converting numbers to Mooré text},
+  url = {https://github.com/ohamjoseph/moore_num},
+  year = {2026}
+}
+```
