@@ -34,7 +34,6 @@ def _convert_internal(n: int, use_short: bool = False) -> str:
     
     if n < 20:
         unit = n - 10
-        #if unit in [2, 3]: return f"piig la {UNITS_SHORT[unit]}"
         return f"piig la a {UNITS_SHORT[unit]}"
     
     if n < 100:
@@ -45,41 +44,43 @@ def _convert_internal(n: int, use_short: bool = False) -> str:
     if n < 1000:
         h, rem = n // 100, n % 100
         if h == 1:
-            prefix = "koabg" if 0 < rem < 30 else "koabga"
+            prefix = "koabg" if rem > 0 else "koabga"
         elif h == 2:
             prefix = "kobsi"
         else:
             prefix = f"kobs-{UNITS_SHORT[h]}"
         if rem == 0: return prefix
-        # Rule: use 'la a' for units/10, 'la' otherwise
         sep = " la a " if rem < 10 else " la "
         return f"{prefix}{sep}{_convert_internal(rem, use_short=True)}"
 
     if n < 1_000_000:
         t, rem = n // 1000, n % 1000
         if t == 1:
-            prefix = "tusri" #if rem == 0 else "tus"
+            prefix = "tusr" if rem > 0 else "tusri"
         elif t < 10:
             prefix = f"tus a {UNITS_SHORT[t]}"
         else:
-            # 10000 -> tus piiga
-            if t == 10 and rem > 0: prefix = "tus piig"
-            else: prefix = f"tus {_convert_internal(t)}" 
+            prefix = f"tus {_convert_internal(t)}"
         if rem == 0: return prefix
         sep = " la a " if rem <= 10 else " la "
         return f"{prefix}{sep}{_convert_internal(rem, use_short=True)}"
 
     if n < 1_000_000_000:
         m, rem = n // 1_000_000, n % 1_000_000
-        # milyõ a ye or [n] milyõ
-        prefix = "milyõ a ye" if m == 1 else f"{_convert_internal(m)} milyõ"
+        if m == 1:
+            prefix = "milyõ a ye"
+        else:
+            prefix = f"milyõ {_convert_internal(m)}"
         if rem == 0: return prefix
         sep = " la a " if rem <= 10 else " la "
         return f"{prefix}{sep}{_convert_internal(rem, use_short=True)}"
 
     if n < 1_000_000_000_000:
         b, rem = n // 1_000_000_000, n % 1_000_000_000
-        prefix = "milyar ye" if b == 1 else f"milyar {_convert_internal(b).lower()}"
+        if b == 1:
+            prefix = "milyar ye"
+        else:
+            prefix = f"milyar {_convert_internal(b)}"
         if rem == 0: return prefix
         sep = " la a " if rem <= 10 else " la "
         return f"{prefix}{sep}{_convert_internal(rem, use_short=True)}"
@@ -89,119 +90,89 @@ REVERSE_UNITS = {v.lower(): k for k, v in UNITS_LONG.items()}
 REVERSE_UNITS_SHORT = {v.lower(): k for k, v in UNITS_SHORT.items()}
 REVERSE_TENS = {v.lower(): k for k, v in TENS.items()}
 
-def _get_token_value(w: str) -> int:
-    w = w.lower()
+def _get_val(w: str) -> int:
+    w = w.lower().strip()
+    if not w: return 0
     if w in REVERSE_UNITS: return REVERSE_UNITS[w]
     if w in REVERSE_UNITS_SHORT: return REVERSE_UNITS_SHORT[w]
     if w in REVERSE_TENS: return REVERSE_TENS[w]
-    if w == "piig": return 10
+    if w in ["piig", "piiga"]: return 10
     if w in ["koabg", "koabga"]: return 100
     if w == "kobsi": return 200
     if w.startswith("kobs-"):
         unit = w.split("-", 1)[1]
-        val = REVERSE_UNITS_SHORT.get(unit, REVERSE_UNITS.get(unit, 1))
-        return val * 100
+        return REVERSE_UNITS_SHORT.get(unit, 1) * 100
+    if w.startswith("pis-"):
+        unit = w.split("-", 1)[1]
+        return REVERSE_UNITS_SHORT.get(unit, 1) * 10
+    if w == "tus": return 1000
+    if w in ["tusr", "tusri"]: return 1000
+    if w == "milyõ": return 1000000
+    if w == "milyar": return 1000000000
+    if w == "zaalem": return 0
     return 0
 
-def _extract_numbers(s: str) -> list[int]:
-    words = [w for w in s.split() if w not in ["la", "a"]]
-    vals = []
-    for w in words:
-        v = _get_token_value(w)
-        if v > 0: vals.append(v)
-    if not vals: return []
-    numbers = []
-    current_num = vals[0]
-    last_val = vals[0]
-    for v in vals[1:]:
-        if v < last_val: current_num += v
-        else:
-            numbers.append(current_num)
-            current_num = v
-        last_val = v
-    numbers.append(current_num)
-    return numbers
-
 def text_to_num(text: str, is_money: bool = False) -> int:
-    def _strip_conj(s):
-        s = s.strip()
-        if s.startswith("la a "): return s[5:].strip()
-        if s.startswith("la "): return s[3:].strip()
-        return s
-
-    def _parse(s):
-        s = s.strip().lower()
-        if not s or s == "zaalem": return 0
+    raw_words = text.lower().strip().split()
+    tokens = []
+    i = 0
+    while i < len(raw_words):
+        w = raw_words[i]
+        if w == "la": tokens.append("PLUS")
+        elif w == "a": i += 1; continue
+        elif w == "ye": tokens.append(1)
+        elif w == "milyõ" and i+2 < len(raw_words) and raw_words[i+1] == "a" and raw_words[i+2] == "ye":
+            tokens.append(1000000); i += 3; continue
+        elif w == "milyar" and i + 1 < len(raw_words) and raw_words[i+1] == "ye":
+            tokens.append(1000000000); i += 2; continue
+        else:
+            v = _get_val(w)
+            if v > 0:
+                if w in ["tusri", "tusr", "koabga", "kobsi"]:
+                    tokens.append(v); tokens.append("PLUS")
+                else: tokens.append(v)
+            elif w == "zaalem": tokens.append(0)
+        i += 1
+    
+    def solve(ts):
+        if not ts: return 0
+        max_s = -1; max_idx = -1
+        for i, v in enumerate(ts):
+            if isinstance(v, int) and v >= 100 and v > max_s:
+                max_s = v; max_idx = i
         
-        if "milyar" in s:
-            if "milyar ye" in s:
-                p = s.split("milyar ye", 1)
-                return 1_000_000_000 + _parse(_strip_conj(p[1]))
-            p = s.split("milyar", 1)
-            rem_str = p[1].strip()
-            if not rem_str: return 1_000_000_000
-            if rem_str.startswith("la "): return 1_000_000_000 + _parse(_strip_conj(rem_str))
+        if max_idx == -1:
+            total = 0; curr = 0
+            for v in ts:
+                if v == "PLUS": continue
+                if v < curr or curr == 0: curr += v
+                else: total += curr; curr = v
+            return total + curr
+        
+        left = ts[:max_idx]
+        right = ts[max_idx+1:]
+        
+        if left:
+            while left and left[-1] == "PLUS": left.pop()
+            mult = solve(left)
+            return (mult if mult > 0 else 1) * max_s + solve(right)
+        else:
+            if not right: return max_s
+            if right[0] == "PLUS": return max_s + solve(right[1:])
             
-            idx1 = rem_str.find("milyõ")
-            idx2 = rem_str.find("tus")
-            if idx1 == -1: idx1 = len(rem_str)
-            if idx2 == -1: idx2 = len(rem_str)
-            split_idx = min(idx1, idx2)
-            
-            m_part = rem_str[:split_idx]
-            rest_str = rem_str[split_idx:]
-            
-            nums = _extract_numbers(m_part)
-            mult = nums[0] if nums else 1
-            rem_val = sum(nums[1:]) if len(nums)>1 else 0
-            return mult * 1_000_000_000 + rem_val + _parse(_strip_conj(rest_str))
-            
-        if "milyõ" in s:
-            if "milyõ a ye" in s:
-                p = s.split("milyõ a ye", 1)
-                return 1_000_000 + _parse(_strip_conj(p[1]))
-            p = s.split("milyõ", 1)
-            count = _parse(p[0]) if p[0].strip() else 1
-            return count * 1_000_000 + _parse(_strip_conj(p[1]))
+            mult_ts = []; rem_ts = []; last_v = 99999999999
+            for j, v in enumerate(right):
+                if v == "PLUS":
+                    if j+1 < len(right) and isinstance(right[j+1], int):
+                        nv = right[j+1]
+                        if nv >= last_v: rem_ts = right[j+1:]; break
+                        if nv < 10 and last_v < 10: rem_ts = right[j+1:]; break
+                    mult_ts.append(v)
+                elif isinstance(v, int):
+                    if v < max_s: mult_ts.append(v); last_v = v
+                    else: rem_ts = right[j:]; break
+            mult = solve(mult_ts)
+            return (mult if mult > 0 else 1) * max_s + solve(rem_ts)
 
-        if "tus" in s:
-            if "tusri" in s:
-                p = s.split("tusri", 1)
-                return 1000 + _parse(_strip_conj(p[1]))
-            if "tus a" in s:
-                p = s.split("tus a", 1)
-                nums = _extract_numbers(_strip_conj(p[1]))
-                mult = nums[0] if nums else 1
-                return mult * 1000 + sum(nums[1:])
-            p = s.split("tus", 1)
-            rem_str = p[1].strip()
-            if not rem_str: return 1000
-            if rem_str.startswith("la "):
-                nums = _extract_numbers(_strip_conj(rem_str))
-                return 1000 + sum(nums)
-            else:
-                nums = _extract_numbers(rem_str)
-                mult = nums[0] if nums else 1
-                return mult * 1000 + sum(nums[1:])
-
-        if "kobsi" in s:
-            p = s.split("kobsi", 1)
-            nums = _extract_numbers(_strip_conj(p[1]))
-            return 200 + sum(nums)
-            
-        if "kobs" in s:
-            p = s.replace("kobs-", "kobs ").split("kobs", 1)
-            nums = _extract_numbers(_strip_conj(p[1]))
-            mult = nums[0] if nums else 1
-            return mult * 100 + sum(nums[1:])
-            
-        if "koabg" in s:
-            p = s.replace("koabga", "koabg").split("koabg", 1)
-            nums = _extract_numbers(_strip_conj(p[1]))
-            return 100 + sum(nums)
-
-        nums = _extract_numbers(s)
-        return sum(nums)
-
-    val = _parse(text)
-    return val * 5 if is_money else val
+    res = solve(tokens)
+    return res * 5 if is_money else res
