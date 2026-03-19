@@ -7,8 +7,8 @@ def read_readme():
 
 setup(
     name="moore_num",
-    version="0.1.5",
-    packages=find_packages(),
+    version="0.1.6",
+    packages=find_packages(exclude=["test*", "tests*"]),
     entry_points={
         "console_scripts": [
             "num2moore=moore_num.cli:main",

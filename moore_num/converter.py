@@ -20,13 +20,21 @@ TENS = {
 def convert_to_text(n: int, is_money: bool = False) -> str:
     """Converts an integer to its Mooré text representation."""
     if is_money:
-        n = n // 5
+        n, c = n // 5, n % 5
+        if n == 0 and c == 0:
+            return _convert_internal(0)
+        if n == 0:
+            return "tãmb a " + _convert_internal(c)
+        if c == 0:
+            return _convert_internal(n)
+        return _convert_internal(n) + " la tãmb a " + _convert_internal(c)
+    
     if n < 0:
-        return "Nindre " + _convert_internal(abs(n))
+        return "- " + _convert_internal(abs(n))
     return _convert_internal(n)
 
 def _convert_internal(n: int, use_short: bool = False) -> str:
-    if n == 0: return "Zaalem"
+    if n == 0: return "zaalem"
     if n <= 10:
         if n == 10: return "piiga"
         if n == 1 and not use_short: return "ye"
@@ -67,23 +75,27 @@ def _convert_internal(n: int, use_short: bool = False) -> str:
 
     if n < 1_000_000_000:
         m, rem = n // 1_000_000, n % 1_000_000
-        if m == 1:
-            prefix = "milyõ a ye"
+        short = not rem == 0
+        
+        if m <= 9:
+            prefix = f"milyõ a {_convert_internal(m, use_short=short)}"
         else:
-            prefix = f"milyõ {_convert_internal(m)}"
+            prefix = f"milyõ {_convert_internal(m, use_short=short)}"
         if rem == 0: return prefix
         sep = " la a " if rem <= 10 else " la "
-        return f"{prefix}{sep}{_convert_internal(rem, use_short=True)}"
+        return f"{prefix}{sep}{_convert_internal(rem, use_short=short)}"
 
     if n < 1_000_000_000_000:
         b, rem = n // 1_000_000_000, n % 1_000_000_000
-        if b == 1:
-            prefix = "milyar ye"
+        short = not rem == 0
+        
+        if b <= 9 :
+            prefix = f"milyar a {_convert_internal(b, use_short=short)}"
         else:
-            prefix = f"milyar {_convert_internal(b)}"
+            prefix = f"milyar {_convert_internal(b, use_short=short)}"
         if rem == 0: return prefix
         sep = " la a " if rem <= 10 else " la "
-        return f"{prefix}{sep}{_convert_internal(rem, use_short=True)}"
+        return f"{prefix}{sep}{_convert_internal(rem, use_short=short)}"
     return str(n)
 
 REVERSE_UNITS = {v.lower(): k for k, v in UNITS_LONG.items()}
@@ -174,5 +186,19 @@ def text_to_num(text: str, is_money: bool = False) -> int:
             mult = solve(mult_ts)
             return (mult if mult > 0 else 1) * max_s + solve(rem_ts)
 
-    res = solve(tokens)
-    return res * 5 if is_money else res
+    text = text.lower().strip()
+    if is_money and "tãmb a" in text:
+        if "la tãmb a" in text:
+            parts = text.split("la tãmb a", 1)
+            val_units = text_to_num(parts[0].strip(), is_money=False)
+            val_francs = text_to_num(parts[1].strip(), is_money=False)
+            return val_units * 5 + val_francs
+        else:
+            parts = text.split("tãmb a", 1)
+            # parts[0] should be empty or 'zaalem' if it came from convert_to_text(0)
+            val_units = text_to_num(parts[0].strip(), is_money=False)
+            val_francs = text_to_num(parts[1].strip(), is_money=False)
+            return val_units * 5 + val_francs
+
+    val = solve(tokens)
+    return val * 5 if is_money else val
