@@ -59,30 +59,62 @@ class TestMooreConverter(unittest.TestCase):
             self.assertEqual(text_to_num(text), n)
 
     def test_large_numbers(self):
+        """Plain number conversion for millions and billions."""
         cases = {
-            1000000: "milyõ a ye",
-            2000000: "milyõ a yiibu",
-            1000000000: "milyar a ye",
-            2000000000: "milyar a yiibu"
+            1_000_000:       "milyõ a ye",
+            2_000_000:       "milyõ a yiibu",
+            5_000_000:       "milyõ a nu",
+            10_000_000:      "milyõ piiga",
+            1_000_000_000:   "milyar a ye",
+            2_000_000_000:   "milyar a yiibu",
         }
         for n, text in cases.items():
-            self.assertEqual(convert_to_text(n), text)
-            self.assertEqual(text_to_num(text), n)
+            with self.subTest(n=n):
+                self.assertEqual(convert_to_text(n), text)
+                self.assertEqual(text_to_num(text), n)
 
-    def test_money(self):
+    def test_money_small(self):
+        """Money amounts below 1 million (5-wakir scale)."""
         cases = {
-            0: "zaalem",
-            1: "tãmb a ye",
-            3: "tãmb a tãabo",
-            5: "ye",
-            7: "ye la tãmb a yiibu",
-            24: "naase la tãmb a naase",
+            0:   "zaalem",
+            1:   "tãmb a ye",
+            3:   "tãmb a tãabo",
+            5:   "ye",
+            7:   "ye la tãmb a yiibu",
+            24:  "naase la tãmb a naase",
             100: "pisi",
-            102: "pisi la tãmb a yiibu"
+            102: "pisi la tãmb a yiibu",
         }
         for n, text in cases.items():
-            self.assertEqual(convert_to_text(n, is_money=True), text)
-            self.assertEqual(text_to_num(text, is_money=True), n)
+            with self.subTest(n=n):
+                self.assertEqual(convert_to_text(n, is_money=True), text)
+                self.assertEqual(text_to_num(text, is_money=True), n)
+
+    def test_money_large(self):
+        """Money amounts at or above 1 million (absolute CFA scale)."""
+        cases = {
+            1_000_000:   "milyõ a ye",
+            2_000_000:   "milyõ a yiibu",
+            5_000_000:   "milyõ a nu",
+            1_000_000_000: "milyar a ye",
+            2_000_000_000: "milyar a yiibu",
+        }
+        for n, text in cases.items():
+            with self.subTest(n=n):
+                self.assertEqual(convert_to_text(n, is_money=True), text)
+                self.assertEqual(text_to_num(text, is_money=True), n)
+
+    def test_money_mixed(self):
+        """Money amounts combining an absolute million part with a wakir/franc sub-part."""
+        cases = {
+            1_000_100:   "milyõ a ye la pisi",        # 1M + 100 FCFA (20 wakirs)
+            1_000_005:   "milyõ a ye la ye",           # 1M + 5 FCFA (1 wakir)
+            1_000_007:   "milyõ a ye la ye la tãmb a yiibu",  # 1M + 7 FCFA (1 wakir + 2 francs)
+        }
+        for n, text in cases.items():
+            with self.subTest(n=n):
+                self.assertEqual(convert_to_text(n, is_money=True), text)
+                self.assertEqual(text_to_num(text, is_money=True), n)
 
 if __name__ == '__main__':
     unittest.main()

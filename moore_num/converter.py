@@ -20,15 +20,33 @@ TENS = {
 def convert_to_text(n: int, is_money: bool = False) -> str:
     """Converts an integer to its Mooré text representation."""
     if is_money:
-        n, c = n // 5, n % 5
-        if n == 0 and c == 0:
+        # Millions and billions are absolute CFA values (no ×5 scaling).
+        # Amounts below 1 million use the 5-wakir system.
+        big = (n // 1_000_000) * 1_000_000   # absolute million/billion part
+        small = n % 1_000_000                 # rest, expressed in wakirs (÷5)
+        small_wakirs, small_francs = small // 5, small % 5
+
+        if big == 0 and small == 0:
             return _convert_internal(0)
-        if n == 0:
-            return "tãmb a " + _convert_internal(c)
-        if c == 0:
-            return _convert_internal(n)
-        return _convert_internal(n) + " la tãmb a " + _convert_internal(c)
-    
+
+        parts = []
+        if big > 0:
+            parts.append(_convert_internal(big))
+        if small_wakirs > 0:
+            parts.append(_convert_internal(small_wakirs))
+        elif small_francs > 0 and big > 0:
+            # no wakirs, only loose francs after a big amount
+            pass
+
+        base = " la ".join(parts) if parts else ""
+
+        if small_francs > 0:
+            franc_str = "tãmb a " + _convert_internal(small_francs)
+            if base:
+                return base + " la " + franc_str
+            return franc_str
+        return base if base else _convert_internal(0)
+
     if n < 0:
         return "- " + _convert_internal(abs(n))
     return _convert_internal(n)
@@ -187,18 +205,27 @@ def text_to_num(text: str, is_money: bool = False) -> int:
             return (mult if mult > 0 else 1) * max_s + solve(rem_ts)
 
     text = text.lower().strip()
-    if is_money and "tãmb a" in text:
-        if "la tãmb a" in text:
-            parts = text.split("la tãmb a", 1)
-            val_units = text_to_num(parts[0].strip(), is_money=False)
-            val_francs = text_to_num(parts[1].strip(), is_money=False)
-            return val_units * 5 + val_francs
+    if is_money:
+        # Split off any loose francs first
+        if "tãmb a" in text:
+            if "la tãmb a" in text:
+                main_part, franc_part = text.split("la tãmb a", 1)
+            else:
+                main_part, franc_part = text.split("tãmb a", 1)
+            francs = text_to_num(franc_part.strip(), is_money=False)
         else:
-            parts = text.split("tãmb a", 1)
-            # parts[0] should be empty or 'zaalem' if it came from convert_to_text(0)
-            val_units = text_to_num(parts[0].strip(), is_money=False)
-            val_francs = text_to_num(parts[1].strip(), is_money=False)
-            return val_units * 5 + val_francs
+            main_part = text
+            francs = 0
+
+        # Now parse the main part with hybrid scaling:
+        # tokens that resolve to >= 1,000,000 are absolute; rest is ×5 (wakirs)
+        main_val = text_to_num(main_part.strip(), is_money=False)
+        if main_val >= 1_000_000:
+            big = (main_val // 1_000_000) * 1_000_000
+            small_wakirs = main_val % 1_000_000
+            return big + small_wakirs * 5 + francs
+        else:
+            return main_val * 5 + francs
 
     val = solve(tokens)
-    return val * 5 if is_money else val
+    return val
