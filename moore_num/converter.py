@@ -88,7 +88,7 @@ def _convert_internal(n: int, use_short: bool = False) -> str:
         else:
             prefix = f"tus {_convert_internal(t)}"
         if rem == 0: return prefix
-        sep = " la a " if rem <= 10 else " la "
+        sep = " la a " if rem < 10 else " la "
         return f"{prefix}{sep}{_convert_internal(rem, use_short=True)}"
 
     if n < 1_000_000_000:
@@ -100,7 +100,7 @@ def _convert_internal(n: int, use_short: bool = False) -> str:
         else:
             prefix = f"milyõ {_convert_internal(m, use_short=short)}"
         if rem == 0: return prefix
-        sep = " la a " if rem <= 10 else " la "
+        sep = " la a " if rem < 10 else " la "
         return f"{prefix}{sep}{_convert_internal(rem, use_short=short)}"
 
     if n < 1_000_000_000_000:
@@ -112,7 +112,7 @@ def _convert_internal(n: int, use_short: bool = False) -> str:
         else:
             prefix = f"milyar {_convert_internal(b, use_short=short)}"
         if rem == 0: return prefix
-        sep = " la a " if rem <= 10 else " la "
+        sep = " la a " if rem < 10 else " la "
         return f"{prefix}{sep}{_convert_internal(rem, use_short=short)}"
     return str(n)
 
