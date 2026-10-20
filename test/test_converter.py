@@ -52,7 +52,11 @@ class TestMooreConverter(unittest.TestCase):
             2000: "tus a yi",
             2001: "tus a yi la a ye",
             10000: "tus piiga",
-            145500: "tus koabg la pis-naase la a nu la kobs-nu"
+            145500: "tus koabga la tus pis-naase la tus a nu la kobs-nu",
+            40006: "tus pis-naase la a yoobe",
+            46000: "tus pis-naase la tus a yoobe",
+            830000: "tus kobs-nii la tus pis-tã",
+            800030: "tus kobs-nii la pis-tã"
         }
         for n, text in cases.items():
             self.assertEqual(convert_to_text(n), text)
@@ -65,6 +69,8 @@ class TestMooreConverter(unittest.TestCase):
             2_000_000:       "milyõ a yiibu",
             5_000_000:       "milyõ a nu",
             10_000_000:      "milyõ piiga",
+            46_000_000:      "milyõ pis-naase la milyõ a yoobe",
+            40_000_006:      "milyõ pis-naase la a yoobe",
             1_000_000_000:   "milyar a ye",
             2_000_000_000:   "milyar a yiibu",
         }
@@ -115,6 +121,37 @@ class TestMooreConverter(unittest.TestCase):
             with self.subTest(n=n):
                 self.assertEqual(convert_to_text(n, is_money=True), text)
                 self.assertEqual(text_to_num(text, is_money=True), n)
+
+    def test_negative(self):
+        cases = {
+            (-5, False):        "- nu",
+            (-46000, False):    "- tus pis-naase la tus a yoobe",
+            (-7, True):         "- ye la tãmb a yiibu",
+            (-1_000_005, True): "- milyõ a ye la ye",
+        }
+        for (n, is_money), text in cases.items():
+            with self.subTest(n=n, is_money=is_money):
+                self.assertEqual(convert_to_text(n, is_money=is_money), text)
+                self.assertEqual(text_to_num(text, is_money=is_money), n)
+
+    def test_unknown_words(self):
+        for text in ["bonjour", "pisi la a bonjour", "kobs-xyz", "", "la a", "tus a yi la 3"]:
+            with self.subTest(text=text):
+                with self.assertRaises(ValueError):
+                    text_to_num(text)
+        with self.assertRaises(ValueError):
+            text_to_num("ye la tãmb a bonjour", is_money=True)
+
+    def test_round_trip(self):
+        """Every number must read back to itself, in plain and money mode."""
+        import random
+        rng = random.Random(0)
+        numbers = list(range(0, 200_001)) + [rng.randrange(10**12) for _ in range(20_000)]
+        for is_money in (False, True):
+            for n in numbers:
+                text = convert_to_text(n, is_money=is_money)
+                if text_to_num(text, is_money=is_money) != n:
+                    self.fail(f"{n} (money={is_money}) -> {text!r} -> {text_to_num(text, is_money=is_money)}")
 
 if __name__ == '__main__':
     unittest.main()

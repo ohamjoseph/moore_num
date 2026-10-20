@@ -7,14 +7,14 @@ def read_readme():
 
 setup(
     name="moore_num",
-    version="0.1.8",
+    version="0.2.2",
     packages=find_packages(exclude=["test*", "tests*"]),
     entry_points={
         "console_scripts": [
             "num2moore=moore_num.cli:main",
         ],
     },
-    author="Hamed",
+    author="Hamed Joseph OUILY",
     author_email="hamed.ouily@gmail.com",
     description="A library to convert numbers to Mooré text and vice versa",
     long_description=read_readme(),
